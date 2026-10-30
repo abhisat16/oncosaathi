@@ -5,6 +5,7 @@ Built for KOITA Health-a-thon 2026 by Team Oslava.
 
 **Try it:** https://oncosaathi.onrender.com
 Open it in Chrome, sign in with a mobile number, and press the call button (allow the microphone).
+The first visit after a quiet spell can take about a minute while the free server wakes up.
 
 > The hospital map is a **sample layout** of Tata Memorial Hospital, Parel, made for this prototype. OncoSaathi gives
 > directions and logistics only. It never gives medical advice: emergencies go to the nearest nurse or help desk,
