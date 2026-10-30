@@ -3,7 +3,7 @@
 A Hindi-first voice companion that guides cancer patients and their families through a hospital, one step at a time.
 Built for KOITA Health-a-thon 2026 by Team Oslava.
 
-**Try it:** [LIVE LINK — added after the first deploy]
+**Try it:** https://oncosaathi.onrender.com
 Open it in Chrome, sign in with a mobile number, and press the call button (allow the microphone).
 
 > The hospital map is a **sample layout** of Tata Memorial Hospital, Parel, made for this prototype. OncoSaathi gives
@@ -35,5 +35,5 @@ Open http://127.0.0.1:7860.
 `call_test.py` (spoken end-to-end call), `simulate_patients.py` (20 simulated patients).
 
 ## Deployment
-`render.yaml` deploys this repository on Render. Every push to `main` updates the live link automatically.
+`render.yaml` deploys this repository on Render. Keys go in a Render Secret File named `.env`. Every push to `main` updates the live link automatically.
 Keys are set in Render's dashboard and are never stored in this repository.
