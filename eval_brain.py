@@ -55,7 +55,7 @@ CASES = [
     # personal + chit-chat + unknown
     ("namaste", "", {"GREETING"}, None),
     ("theek hai, dhanyavaad", "", {"BYE", "ACK"}, None),
-    ("where is the swimming pool", "", {"NONE"}, None),
+    ("where is the swimming pool", "", {"NONE", "OFF_TOPIC"}, None),
     ("cath lab kahan hai", "", {"NONE"}, None),
 ]
 

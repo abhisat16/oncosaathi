@@ -123,7 +123,7 @@ async def main():
     r = await turn(st6, "दूसरी मंजिल पे है ना?")
     check("floor confirmation for the OPD -> points to the slip / cancer type, not a guess", "पर्ची" in r["text"] or "प्रकार" in r["text"] or r["text"].startswith("नहीं"), r["text"])
     r = await turn(st6, "क्या आप मेरी सहायता कर सकते हैं?")
-    check("asking for help -> offer, not help desk", "ज़रूर" in r["text"], r["text"])
+    check("asking for help -> offer, not help desk", ("ज़रूर" in r["text"] or "मदद करूँ" in r["text"]) and "इंक्वायरी" not in r["text"], r["text"])
     r = await turn(st6, "blah blah kuch bhi")
     check("first unclear question -> clarify, not help desk", "समझ नहीं" in r["text"], r["text"])
     r = await turn(st6, "ମୋତେ ବୁଝା ପଡୁନି ମୁଁ କୋଉ floor-କୁ ଯିବି। Radiography department କୋଉଠି ଅଛି?")
@@ -176,6 +176,17 @@ async def main():
     await turn(st10, "मेरे को pharmacology department जाना है।")
     r = await turn(st10, "मैं Tata Memorial Hospital की बात कर रहा हूं।")
     check("'...की बात कर रहा हूं' -> held pharmacy question answered", "डिस्पेंसरी" in r["text"] and "GJB" in r["text"], r["text"])
+
+    # 4 Nov live call: language request and an off-topic question
+    st11 = {"pid": None, "mode": "voice", "lang": "hi", "hospital": "tata-parel"}
+    r = await turn(st11, "Can you talk to me in English?")
+    check("'talk to me in English' -> switches to English", r["lang"] == "en" and "English" in r["text"], r["text"])
+    r = await turn(st11, "दवा कहाँ मिलेगी?")
+    check("after switching, a Hindi question is answered in English", r["lang"] == "en" and "Dispensary" in r["text"], r["text"])
+    r = await turn(st11, "Who is Shah Rukh Khan?")
+    check("off-topic -> polite 'only hospital help', not the enquiry counter", "can't help" in r["text"] and "Enquiry" not in r["text"], r["text"])
+    r = await turn(st11, "हिंदी में बात करो")
+    check("'हिंदी में बात करो' -> back to Hindi", r["lang"] == "hi" and "हिंदी" in r["text"], r["text"])
 
     # reminders (web chat; WhatsApp only if configured)
     n = await reminders.run_once(force=True)

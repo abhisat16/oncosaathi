@@ -53,6 +53,7 @@ LABELS = {  # non-place labels the classifier may return
     "OPD_GENERIC": "wants 'the OPD' or 'the doctor' without saying which clinic",
     "GREETING": "only a greeting",
     "BYE": "thanks / goodbye / that's all",
+    "OFF_TOPIC": "not about the hospital, cancer care, travel, stay or how they feel: celebrities, films, cricket, politics, general knowledge, jokes",
     "NONE": "anything else, or no matching place in the list",
 }
 ASPECTS = ("where", "bring", "hours", "way", "note", "prep", "cost", "calm", "again", "detail", "B", "G", "1", "2", "3", "4", "5", "6", "7", "8")
@@ -187,7 +188,9 @@ SYSTEM = (
     "'chemo ke baad ulti aur chakkar' -> {\"label\": \"CLINICAL\", \"aspect\": \"where\"}\n"
     "'मुझे सांस नहीं आ रही' -> {\"label\": \"EMERGENCY\", \"aspect\": \"where\"}\n"
     "'ab jeene ka mann nahi karta' -> {\"label\": \"SELF_HARM\", \"aspect\": \"where\"}\n"
-    "'test karwana hai' -> {\"label\": \"NONE\", \"aspect\": \"where\"}\n\n"
+    "'test karwana hai' -> {\"label\": \"NONE\", \"aspect\": \"where\"}\n"
+    "'Who is Shah Rukh Khan?' -> {\"label\": \"OFF_TOPIC\", \"aspect\": \"where\"}\n"
+    "'aaj match kaun jeeta' -> {\"label\": \"OFF_TOPIC\", \"aspect\": \"where\"}\n\n"
     "LABELS:\n" + "\n".join(f"{k}: {v}" for k, v in LABELS.items()) +
     "\n\nPLACE IDS:\n" + "\n".join(_place_line(u) for u in PLACES.values())
 )
@@ -874,6 +877,11 @@ def say(decision, state, lang, mode, text):
     if label == "ASK_HOSPITAL":
         return ("माफ़ कीजिए। बताइए, आप किस अस्पताल में हैं या किस अस्पताल जा रहे हैं?" if hi else
                 "Sorry. Which hospital are you at, or going to?"), []
+    if label == "OFF_TOPIC":
+        return ("माफ़ कीजिए, उसमें मैं मदद नहीं कर सकती। मैं सिर्फ़ अस्पताल से जुड़ी बातों में साथ देती हूँ: रास्ता, कागज़ात, रहने की जगह, सफ़र, "
+                "या मन की बात। बताइए, इनमें से किसमें मदद करूँ?" if hi else
+                "Sorry, I can't help with that. I'm here only for the hospital: directions, documents, places to stay, travel, "
+                "or if you just want to talk about how you feel. What can I help you with?"), []
     if label == "ACK":
         return ("ठीक है जी। आराम से जाइए, और कुछ चाहिए तो मुझसे पूछिए।" if hi else "Alright. Take your time, and ask me if you need anything else."), []
     if label == "FIRST_VISIT":
@@ -1120,11 +1128,30 @@ async def translate(text, src, tgt):
         return None
 
 
+LANG_REQUEST = {   # explicit "please speak X" requests; the choice then sticks for the conversation
+    "en": r"\b(talk|speak|reply|answer|say)\b[^.?!]{0,25}\benglish\b|\benglish\s+(me|mein|main|mai)\b|अंग्रेज़ी में|अंग्रेजी में|इंग्लिश में",
+    "hi": r"\b(talk|speak|reply|answer|say)\b[^.?!]{0,25}\bhindi\b|\bhindi\s+(me|mein|main|mai)\b|हिंदी में|हिन्दी में",
+    "mr": r"\b(talk|speak|reply)\b[^.?!]{0,25}\bmarathi\b|\bmarathi\s+(me|mein|madhe)\b|मराठी में|मराठीत",
+    "od": r"\b(talk|speak|reply)\b[^.?!]{0,25}\b(odia|oriya)\b|\b(odia|oriya)\s+(me|mein)\b|ओड़िया में|उड़िया में|ଓଡ଼ିଆରେ",
+    "bn": r"\b(talk|speak|reply)\b[^.?!]{0,25}\bbengali\b|\b(bengali|bangla)\s+(me|mein)\b|बंगाली में|বাংলায়",
+}
+LANG_ACK = {"en": "Of course, I'll speak in English now. How can I help you?",
+            "hi": "ज़रूर, अब मैं हिंदी में बात करूँगी। बताइए, क्या मदद करूँ?"}
+
+
 async def respond(text, state, stt_lang=None):
     """One turn. Returns {"text", "lang", "route", "actions"}.
     Hindi and English are answered directly. Other Indian languages (Odia, Marathi, Bengali, Tamil…) are translated to
     English, answered from the same data and templates, and the answer is translated back, so the facts never change."""
-    lang = core.pick_lang(text, "Auto", stt_lang)
+    asked = next((code for code, rx in LANG_REQUEST.items() if re.search(rx, " " + text.lower() + " ")), None)
+    if asked:                                       # "Can you talk to me in English?": switch and stay switched
+        state["lang_pref"] = state["lang"] = asked
+        ack = LANG_ACK.get(asked) or LANG_ACK["en"]
+        if asked not in LANG_ACK:
+            ack = await translate(LANG_ACK["en"], "en-IN", core.LANG_CODE[asked]) or LANG_ACK["en"]
+        return {"text": ack, "lang": asked if asked in LANG_ACK or ack != LANG_ACK["en"] else "en",
+                "route": f"LANG_SWITCH {asked} via rules", "actions": []}
+    lang = state.get("lang_pref") or core.pick_lang(text, "Auto", stt_lang)
     if lang == "en" and state.get("lang") not in (None, "en") and len(text.split()) <= 4:
         lang = state["lang"]             # "Tata Memorial", "Radiology": names alone don't switch the conversation's language
     if lang in ("hi", "en"):
