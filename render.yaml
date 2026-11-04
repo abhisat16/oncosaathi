@@ -15,6 +15,13 @@ services:
         value: local
       - key: PYTHONUNBUFFERED
         value: "1"
+      # Sarvam voice agent (hosted Samvaad agent). These IDs are not secret; the agent API key stays in the .env Secret File.
+      - key: SARVAM_AGENT_APP_ID
+        value: Oncosathi-3-dc21d271-2e03
+      - key: SARVAM_AGENT_WORKSPACE_ID
+        value: 019e90c4-496f-772c-a0e9-435d6747bdee
+      - key: SARVAM_AGENT_ORG_ID
+        value: 019e90c4-4941-7935-9f3b-c946ca571f3d
       # Secrets: Render asks for these once, in its dashboard. They are never stored in GitHub.
       - key: SARVAM_API_KEY
         sync: false
