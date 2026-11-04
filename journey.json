@@ -2,8 +2,12 @@
  "documents": {
   "always": [
    [
-    "Aadhaar card",
-    "आधार कार्ड"
+    "Aadhaar or another government photo ID, for the patient and the nominee",
+    "मरीज़ और नॉमिनी दोनों का आधार या कोई सरकारी फ़ोटो पहचान पत्र"
+   ],
+   [
+    "Money for registration: General Rs 100 fee + Rs 4,000 deposit (Private Rs 500 + Rs 20,000)",
+    "रजिस्ट्रेशन के पैसे: जनरल 100 रुपये फ़ीस + 4,000 जमा (प्राइवेट 500 + 20,000)"
    ],
    [
     "Referral letter from your doctor",
@@ -35,6 +39,10 @@
    ]
   ],
   "if_applicable": [
+   [
+    "Online pre-registration number (13-digit WPRN), if you registered on tmc.gov.in",
+    "ऑनलाइन रजिस्ट्रेशन नंबर (13 अंकों का WPRN), अगर tmc.gov.in पर रजिस्टर किया है"
+   ],
    [
     "Ayushman Bharat (PM-JAY) card",
     "आयुष्मान भारत कार्ड"

@@ -198,8 +198,8 @@ def slip_steps(text):
 def slip_reply(found, lang, saved):
     hi = lang == "hi"
     if not found:
-        return ("इस पर्ची पर मुझे कोई जाँच या विभाग नहीं मिला। कृपया इसे गेट 1 के हेल्प डेस्क पर दिखाइए।" if hi else
-                "I couldn't find any test or department on this slip. Please show it at the help desk inside Gate 1.")
+        return ("इस पर्ची पर मुझे कोई जाँच या विभाग नहीं मिला। कृपया इसे GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर पर दिखाइए।" if hi else
+                "I couldn't find any test or department on this slip. Please show it at the Enquiry counter on the GJB ground floor.")
     lines = ["आपकी पर्ची के हिसाब से रास्ता:" if hi else "Your route from the slip:"]
     for i, (_, _, uid, title, title_hi) in enumerate(found, 1):
         lines.append(f"{i}. {title_hi if hi else title}: {brain.place_short(brain.PLACES[uid], lang)}")
@@ -225,6 +225,11 @@ def logo():
     if not os.path.exists(path):
         return JSONResponse({"error": "no logo yet"}, status_code=404)
     return FileResponse(path, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/building_layout.jpg")
+def building_layout():
+    return FileResponse(os.path.join(HERE, "static", "building_layout.jpg"))
 
 
 @app.get("/map")

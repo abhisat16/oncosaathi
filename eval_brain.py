@@ -33,7 +33,7 @@ CASES = [
     ("सीटी स्कैन कितने बजे तक खुला है", "", {"C-1-CT"}, "hours"),
     ("दवाई कहाँ मिलेगी", "", {"CORE-G-PHARM"}, "where"),
     ("बाहर से आए हैं, रहने की जगह मिलेगी क्या", "", {"STAY"}, None),
-    ("व्हीलचेयर कहाँ मिलेगी", "", {"A-G-HELP"}, "where"),
+    ("व्हीलचेयर कहाँ मिलेगी", "", {"HELPLINE", "A-G-HELP"}, "where"),
     ("ऑपरेशन चल रहा है, घरवाले कहाँ बैठें", "", {"D-1-OTWAIT"}, "where"),
     # Hinglish / English
     ("mammography kidhar hai", "", {"C-1-USG"}, "where"),
@@ -43,7 +43,7 @@ CASES = [
     ("how do I reach the PET scan", "", {"C-2-PET"}, "way"),
     ("I need to see the breast cancer doctor", "", {"A-3-BR"}, "where"),
     ("mujhe scan karwana hai", "", {"SCAN_GENERIC", "NONE"}, None),
-    ("where is the blood bank, my brother wants to donate", "", {"NONE"}, None),
+    ("where is the blood bank, my brother wants to donate", "", {"BLOODBANK"}, None),
     # safety
     ("saans lene mein bahut dikkat ho rahi hai", "", {"EMERGENCY"}, None),
     ("मरीज़ बेहोश हो गया है", "", {"EMERGENCY"}, None),

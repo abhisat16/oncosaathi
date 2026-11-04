@@ -6,7 +6,7 @@ The "rack" (what is fixed vs. what is free):
 - FREE: nothing here is generated. The LLM (sarvam-105b) only CLASSIFIES the words into one label; every sentence
   is a template filled from the data. So a room, a number or a date that isn't in the data can't be said.
 Safety runs first and can't be overridden: self-harm -> Tele-MANAS 14416; emergency -> nearest nurse / floor help desk
-(in hospital) or 108 (at home); medical questions -> doctor / nurse / help desk; fear -> counsellor + Tele-MANAS.
+(in hospital) or 108 (at home); medical questions -> doctor / nurse / help desk; fear -> Kevat counsellor + Tele-MANAS.
 
 state (one dict per chat session or call): pid, mode ("chat" | "voice"), awaiting, where ("in" | "coming"), place, text.
 """
@@ -55,7 +55,7 @@ LABELS = {  # non-place labels the classifier may return
     "BYE": "thanks / goodbye / that's all",
     "NONE": "anything else, or no matching place in the list",
 }
-ASPECTS = ("where", "bring", "hours", "way", "note", "prep", "cost", "calm", "again", "detail", "G", "1", "2", "3", "4")
+ASPECTS = ("where", "bring", "hours", "way", "note", "prep", "cost", "calm", "again", "detail", "B", "G", "1", "2", "3", "4", "5", "6", "7", "8")
 COST_RX = r"\b(kharcha|kharch|paisa|paise|free|muft|rupay|rupaye|cost|charge|fees?)\b|खर्चा|खर्च|पैसा|पैसे|मुफ्त|मुफ़्त|रुपया|रुपये|किराया|फ़्री|फ्री"
 FEVER_RX = r"\b(fever|bukhar|bukhaar)\b|बुखार"
 FEVER_URGENT_RX = r"\b(10[1-5]|chemo|kimo|shiver\w*|chills|kaanp\w*)\b|कीमो|ठंड लग|कंपकंपी|काँप|कांप"
@@ -90,9 +90,14 @@ QUESTION_RX = (r"\?|\b(kahan|kaha|kahaan|kidhar|kaise|kab|where|how|when)\b|"
 HELP_RX = (r"\b(help|madad|sahayata)\b|(?<![\u0900-\u097F])(मदद|सहायता|हेल्प)(?![\u0900-\u097F])")
 CONFIRM_RX = (r"\b(floor|manzil|manjil|wing|room|sahi|theek|right|correct|na)\b|"
               r"(?<![\u0900-\u097F])(मंज़िल|मंजिल|फ्लोर|फ़्लोर|विंग|कमरा|सही|ठीक|ना)(?![\u0900-\u097F])")
-FLOOR_WORDS = {"G": r"ground|ग्राउंड|नीचे|neeche|niche", "1": r"\bfirst\b|\b1st\b|pehli|pahli|पहली|पहले (फ्लोर|फ़्लोर|माले|मंज़िल|मंजिल)",
+FLOOR_WORDS = {"B": r"basement|बेसमेंट|बेसमेन्ट", "G": r"ground|ग्राउंड|नीचे|neeche|niche", "1": r"\bfirst\b|\b1st\b|pehli|pahli|पहली|पहले (फ्लोर|फ़्लोर|माले|मंज़िल|मंजिल)",
                "2": r"\bsecond\b|\b2nd\b|doosri|dusri|doosre|dusre|दूसरी|दूसरे", "3": r"\bthird\b|\b3rd\b|teesri|tisri|teesre|तीसरी|तीसरे",
-               "4": r"\bfourth\b|\b4th\b|chauthi|chauthe|चौथी|चौथे"}
+               "4": r"\bfourth\b|\b4th\b|chauthi|chauthe|चौथी|चौथे", "5": r"\bfifth\b|\b5th\b|paanchvi|panchvi|पाँचवीं|पांचवीं|पाँचवें|पांचवें",
+               "6": r"\bsixth\b|\b6th\b|chhathi|chhati|छठी|छठे", "7": r"\bseventh\b|\b7th\b|saatvi|satvi|सातवीं|सातवें",
+               "8": r"\beighth\b|\b8th\b|aathvi|athvi|आठवीं|आठवें"}
+BUILDING_RX = {"MB": r"\bmb\b|main building|मेन बिल्डिंग", "GJB": r"\bgjb\b|golden jubilee|jubilee|गोल्डन जुबिली|जुबिली",
+               "AB": r"\bab\b|annexe|annex|एनेक्स", "HBB": r"\bhbb\b|homi bhabha|bhabha|होमी भाभा|भाभा",
+               "SB": r"\bsb\b|service building|service block|सर्विस बिल्डिंग|सर्विस ब्लॉक"}
 FLOOR_LIST_RX = (r"\bk(?:au|o)ne?\s*-?\s*s[aei]\b|\b(kya kya|kya-kya|kaun kaun|kon kon|kya hai|saare|sare|sab|list|data|"
                  r"what is on|what's on|which department|which departments|what department|what departments)\b|"
                  r"(?<![\u0900-\u097F])(क्या क्या|क्या-क्या|कौन कौन|कौन-कौन|कौन सा|कौन से|कौन सी|कौनसा|कौनसे|क्या है|"
@@ -419,8 +424,6 @@ def _name(u, lang):
 
 
 def _wing(u, lang):
-    if u["block"] == "CORE":
-        return "बीच वाली मुख्य लिफ़्ट के पास" if lang == "hi" else "the centre, by the main lift"
     b = BLOCKS[u["block"]]
     return b["name_hi"].split("·")[0].strip() if lang == "hi" else b["name"]
 
@@ -433,11 +436,13 @@ def _floor(u, lang):
 def _lift(u, lang):
     if u["floor"] == "G":
         return ""
-    return f"मुख्य लिफ़्ट से {_floor(u, lang)} पर जाइए।" if lang == "hi" else f"Take the main lift to the {_floor(u, lang)}."
+    if u["floor"] == "B":
+        return "लिफ़्ट या सीढ़ी से बेसमेंट में जाइए।" if lang == "hi" else "Take the lift or stairs down to the basement."
+    return f"उसी बिल्डिंग की लिफ़्ट से {_floor(u, lang)} पर जाइए।" if lang == "hi" else f"Take that building's lift to the {_floor(u, lang)}."
 
 
 def place_short(u, lang):
-    """'Wing A, first floor, rooms 101 to 105' — for dates and next steps."""
+    """'Golden Jubilee Building (GJB), fifth floor, rooms 508 to 510' — for dates and next steps."""
     if "block" not in u:
         return _name(u, lang)
     return f"{_wing(u, lang)}, {_floor(u, lang)}, {_f(u, 'rooms', lang)}"
@@ -451,21 +456,21 @@ def say_place(u, aspect, lang, mode):
     if "block" not in u:
         return f"{name}: {_f(u, 'note', lang)}।" if hi else f"{name}: {_f(u, 'note', lang)}."
     if u.get("public") is False:
-        return (f"{name} सिर्फ़ स्टाफ़ के लिए है। वहाँ जाने को कहा गया हो, तो गेट 1 के हेल्प डेस्क पर पूछिए।" if hi else
-                f"{name} is for staff only. If you were asked to go there, please ask at the help desk at Gate 1.")
+        return (f"{name} सिर्फ़ स्टाफ़ के लिए है। वहाँ जाने को कहा गया हो, तो GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर पर पूछिए।" if hi else
+                f"{name} is for staff only. If you were asked to go there, please ask at the Enquiry counter on the GJB ground floor.")
     if aspect == "bring":
         bring = _f(u, "bring", lang) if u.get("bring") else ""
         fasting = _f(u, "note", lang) if re.search(r"fast", u.get("note") or "", re.I) else ""
         if not bring:
-            return (f"{name} के लिए मेरे पास कोई ख़ास सूची नहीं है। अपना UHID कार्ड और पर्ची साथ रखिए।" if hi else
-                    f"I don't have a special list for {name}. Please carry your UHID card and your slip.")
+            return (f"{name} के लिए मेरे पास कोई ख़ास सूची नहीं है। अपना स्मार्ट कार्ड और पर्ची साथ रखिए।" if hi else
+                    f"I don't have a special list for {name}. Please carry your Smart card and your slip.")
         out = f"{name} के लिए साथ लाइए: {bring}।" if hi else f"For {name}, please bring: {bring}."
         return out + (f" {fasting}।" if hi else f" {fasting}.") if fasting else out
     if aspect == "detail":
         if u.get("note"):
             return f"{name}: {_f(u, 'note', lang)}।" if hi else f"{name}: {_f(u, 'note', lang)}."
-        return (f"{name} के बारे में यह बात मेरे पास पक्की नहीं है। वहीं के काउंटर पर या गेट 1 के हेल्प डेस्क पर पूछ लीजिए।" if hi else
-                f"I don't have that detail for {name}. Please ask at its counter or the help desk inside Gate 1.")
+        return (f"{name} के बारे में यह बात मेरे पास पक्की नहीं है। वहीं के काउंटर पर या GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर पर पूछ लीजिए।" if hi else
+                f"I don't have that detail for {name}. Please ask at its counter or the Enquiry counter on the GJB ground floor.")
     if aspect == "prep":
         fasting = re.search(r"fast", u.get("note") or "", re.I)
         if fasting:
@@ -478,12 +483,12 @@ def say_place(u, aspect, lang, mode):
                (" बाक़ी बातें वहाँ के डॉक्टर अच्छे से समझा देंगे।" if hi else " The doctors there will explain the rest.")
     if aspect == "note":
         note = _f(u, "note", lang) if u.get("note") else ""
-        return ((f"{name}: {note}।" if note else f"{name} के बारे में यह जानकारी मेरे पास नहीं है। गेट 1 के हेल्प डेस्क पर पूछिए।") if hi else
-                (f"{name}: {note}." if note else f"I don't have that detail for {name}. Please ask at the help desk inside Gate 1."))
+        return ((f"{name}: {note}।" if note else f"{name} के बारे में यह जानकारी मेरे पास नहीं है। GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर पर पूछिए।") if hi else
+                (f"{name}: {note}." if note else f"I don't have that detail for {name}. Please ask at the Enquiry counter on the GJB ground floor."))
     if aspect == "hours":
         if not u.get("hours"):
-            return (f"{name} का समय मेरे पास नहीं है। गेट 1 के हेल्प डेस्क पर पूछिए।" if hi else
-                    f"I don't have the timings for {name}. Please ask at the help desk at Gate 1.")
+            return (f"{name} का समय मेरे पास नहीं है। GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर पर पूछिए।" if hi else
+                    f"I don't have the timings for {name}. Please ask at the Enquiry counter on the GJB ground floor.")
         return f"{name} का समय: {_f(u, 'hours', lang)}।" if hi else f"{name} timings: {_f(u, 'hours', lang)}."
     if aspect == "way" and u.get("path"):
         return (u.get("path_hi") or u["path"]) if hi else u["path"]
@@ -613,6 +618,8 @@ def say_nav(u, state, lang, text):
     floor_said = next((f for f, rx in FLOOR_WORDS.items() if re.search(rx, t)), None)
     if re.search(LIFT_RX, t) or (floor_said and floor_said == u.get("floor") and floor_said != "G"):
         idx = (lift_i + 1) if lift_i is not None else (state.get("path_step") or 0) + 1   # at the lift / on the right floor
+    elif u.get("block") and re.search(BUILDING_RX.get(u["block"], r"$^"), t) and len(steps) > 1:
+        idx = 1                                                      # reached the right building: next is the lift / room
     elif re.search(LOBBY_RX, t):
         idx = 0
     else:
@@ -638,16 +645,16 @@ def say_after(uid, state, lang, mode):
         return say_journey(state, lang, mode)
     opd, report = PLACES["A-1-MED"], PLACES["B-G-REPORT"]
     nxt = {
-        "A-G-REG": ("रजिस्ट्रेशन के बाद अपना UHID कार्ड लेकर ओपीडी जाइए: विंग A, पहली मंज़िल, मुख्य लिफ़्ट से। कमरा नंबर आपकी ओपीडी पर्ची पर होगा। "
-                    "रजिस्ट्रेशन अभी बाकी हो तो पहले काउंटर 1 से 6 पर कराइए।",
-                    "After registration, take your UHID card to the OPD: Wing A, first floor, by the main lift. Your room number is on your OPD slip. "
-                    "If you haven't registered yet, do that first at counters 1 to 6."),
-        "A-G-BILL": ("पैसे जमा करके रसीद लीजिए, फिर उस जाँच की जगह जाइए जो पर्ची पर लिखी है। जाँच का नाम बताइए या पर्ची की फ़ोटो भेजिए, मैं रास्ता बता दूँगी।",
-                     "After paying, keep the receipt and go to the test written on your slip. Tell me the test name or send a photo of the slip and I'll guide you."),
-        "B-G-SAMPLE": (f"सैंपल देने के बाद रिपोर्ट {place_short(report, lang)} के रिपोर्ट काउंटर से मिलती है। {_f(report, 'note', lang)}।",
-                       f"After the sample, collect the report at the report counter, {place_short(report, lang)}. {_f(report, 'note', lang)}."),
-        "A-G-HELP": ("नए मरीज़ हैं तो पहले रजिस्ट्रेशन: मेन लॉबी, काउंटर 1 से 6। पहले से रजिस्टर हैं तो बताइए किस विभाग जाना है, या पर्ची की फ़ोटो भेजिए।",
-                     "If you're a new patient, register first at the main lobby, counters 1 to 6. If you're already registered, tell me the department or send a photo of your slip."),
+        "A-G-REG": ("रजिस्ट्रेशन के बाद स्मार्ट कार्ड और केस फ़ाइल लेकर अपनी ओपीडी जाइए; कमरा नंबर पर्ची पर होता है। अपने कैंसर का प्रकार बताइए, मैं कमरा बता दूँगी। "
+                    "रजिस्ट्रेशन अभी बाकी हो तो पहले GJB ग्राउंड फ़्लोर पर कराइए, सुबह 8 से 11 बजे तक।",
+                    "After registration, take your Smart card and case file to your OPD; the room is on your slip. Tell me your cancer type and I'll tell you the room. "
+                    "If you haven't registered yet, do that first on the GJB ground floor, 8 to 11 am."),
+        "A-G-BILL": ("स्मार्ट कार्ड में पैसे डालने के बाद उस जाँच की जगह जाइए जो पर्ची पर लिखी है। जाँच का नाम बताइए या पर्ची की फ़ोटो भेजिए, मैं रास्ता बता दूँगी।",
+                     "After topping up your Smart card, go to the test written on your slip. Tell me the test name or send a photo of the slip and I'll guide you."),
+        "B-G-SAMPLE": (f"सैंपल देने के बाद रिपोर्ट के लिए काउंटर नहीं जाना होता: {_f(report, 'note', lang)}।",
+                       f"After the sample, you don't need to collect the report from a counter: {_f(report, 'note', lang)}."),
+        "A-G-HELP": ("नए मरीज़ हैं तो पहले रजिस्ट्रेशन: GJB ग्राउंड फ़्लोर (प्राइवेट: HBB पहली मंज़िल)। पहले से रजिस्टर हैं तो बताइए किस विभाग जाना है, या पर्ची की फ़ोटो भेजिए।",
+                     "If you're a new patient, register first: GJB ground floor (Private: HBB first floor). If you're already registered, tell me the department or send a photo of your slip."),
     }
     if uid in nxt:
         return nxt[uid][0 if hi else 1]
@@ -726,8 +733,8 @@ def say_stay(text, lang, mode, page=0, costs=False):
         order = {"free": 0, "under_300": 1, "300_1000": 2, "unknown": 3}
         picks = sorted(places, key=lambda p: order.get(p["band"], 9))[:3]
         parts = [f"{p['name']}: {p['cost']}" for p in picks]
-        return (("खर्चा जगह के हिसाब से है: " + "; ".join(parts) + "। फ़ोन का पैसा न हो तो अस्पताल में सामाजिक कार्य डेस्क (विंग A, काउंटर 12–13) मुफ़्त में मदद करता है।") if hi else
-                ("It depends on the place: " + "; ".join(parts) + ". If you can't afford a phone call, the social work desk at the hospital (Wing A, counters 12–13) helps for free."))
+        return (("खर्चा जगह के हिसाब से है: " + "; ".join(parts) + "। फ़ोन का पैसा न हो तो अस्पताल में मेडिकल सोशल सर्विसेज़, गोल्डन जुबिली बिल्डिंग ग्राउंड फ़्लोर मुफ़्त में मदद करता है।") if hi else
+                ("It depends on the place: " + "; ".join(parts) + ". If you can't afford a phone call, Medical Social Services, Golden Jubilee Building ground floor helps for free."))
     if mode == "voice":
         picks = places[2 * page:2 * page + 2] or places[:2]
         parts = [f"{p['name']}, {p['area']}, नंबर {p['phones'][0]}" if hi else f"{p['name']} in {p['area']}, number {p['phones'][0]}" for p in picks]
@@ -736,8 +743,8 @@ def say_stay(text, lang, mode, page=0, costs=False):
     lines = ["टाटा मेमोरियल के पास रहने की जगहें:" if hi else "Places to stay near Tata Memorial:"]
     for p in places[:6]:
         lines.append(f"• {p['name']} ({p['area']}): {', '.join(p['phones'])}. {p['cost']}.")
-    lines += ["", note, "सामाजिक कार्य डेस्क (विंग A, काउंटर 12–13) भी मदद कर सकता है।" if hi else
-              "The social work desk (Wing A, counters 12–13) can also help you find a place."]
+    lines += ["", note, "मेडिकल सोशल सर्विसेज़, गोल्डन जुबिली बिल्डिंग ग्राउंड फ़्लोर भी मदद कर सकता है।" if hi else
+              "Medical Social Services, Golden Jubilee Building ground floor can also help you find a place."]
     return "\n".join(lines)
 
 
@@ -747,12 +754,11 @@ VOICE_SAFETY = {
                   "hi": "आपने बताया, बहुत अच्छा किया। आपकी ज़िंदगी बहुत क़ीमती है। अभी किसी अपने या स्टाफ़ के पास रहिए, "
                         "और टेली-मानस 14416 पर कॉल कीजिए। यह मुफ़्त है, चौबीसों घंटे, आपकी भाषा में।"},
     "CLINICAL": {"en": "That's a question for your doctor or nurse; I can't advise on medicines or treatment. "
-                       "Please ask the nurse or help desk on your floor, or the help desk inside Gate 1.",
+                       "Please ask the nurse or help desk on your floor, or the Enquiry counter on the GJB ground floor.",
                  "hi": "यह सवाल डॉक्टर या नर्स का है, मैं दवा या इलाज की सलाह नहीं दे सकती। "
-                       "अपनी मंज़िल की नर्स या हेल्प डेस्क से पूछिए, या गेट 1 के अंदर हेल्प डेस्क से।"},
-    "EMOTIONAL": {"en": "I understand, this is a hard time, and you are not alone. Our counsellors in Wing A, fourth floor, rooms 401 to 403, "
-                        "can talk with you today. Any time, day or night, you can also call Tele-MANAS on 14416, free.",
-                  "hi": "मैं समझ सकती हूँ, यह मुश्किल समय है, आप अकेले नहीं हैं। विंग A, चौथी मंज़िल, कमरा 401 से 403 में काउंसलर आज ही आपसे बात कर सकते हैं। "
+                       "अपनी मंज़िल की नर्स या हेल्प डेस्क से पूछिए, या GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर से।"},
+    "EMOTIONAL": {"en": "I understand, this is a hard time, and you are not alone. You can talk today with a Kevat, the hospital's patient navigators in green coats (counselling room GJB 512, fifth floor). Any time, day or night, you can also call Tele-MANAS on 14416, free.",
+                  "hi": "मैं समझ सकती हूँ, यह मुश्किल समय है, आप अकेले नहीं हैं। आज ही केवट से, यानी अस्पताल के पेशेंट नेविगेटर, हरे कोट में (काउंसलिंग रूम GJB 512, पाँचवीं मंज़िल) बात कर सकते हैं। "
                         "दिन हो या रात, टेली-मानस 14416 पर भी मुफ़्त बात कर सकते हैं।"},
 }
 EMERGENCY = {
@@ -764,9 +770,9 @@ EMERGENCY = {
            "hi": "यह इमरजेंसी हो सकती है। अस्पताल में हैं तो अभी पास की नर्स या मंज़िल के हेल्प डेस्क को बताइए। घर पर हैं तो 108 पर कॉल कीजिए।"},
 }
 AGAIN = {
-    "EMOTIONAL": {"en": "I'm here and I'm listening. It's okay to feel this way. Would you like me to guide you to the counsellors now? "
+    "EMOTIONAL": {"en": "I'm here and I'm listening. It's okay to feel this way. Would you like me to guide you to a Kevat counsellor now? "
                         "And Tele-MANAS 14416 is always there, free.",
-                  "hi": "मैं आपकी बात सुन रही हूँ। ऐसा महसूस करना बिल्कुल स्वाभाविक है। क्या मैं आपको अभी काउंसलर तक का रास्ता बताऊँ? "
+                  "hi": "मैं आपकी बात सुन रही हूँ। ऐसा महसूस करना बिल्कुल स्वाभाविक है। क्या मैं आपको अभी केवट काउंसलर तक का रास्ता बताऊँ? "
                         "और टेली-मानस 14416 हमेशा मुफ़्त में बात करने के लिए है।"},
     "CLINICAL": {"en": "I understand it's urgent. Changing a medicine or its dose on your own can be risky, so please tell the nearest nurse right now. "
                        "If the pain is unbearable, go to Emergency; at home, call 108.",
@@ -784,8 +790,8 @@ COMFORT = {   # rotating fixed lines for someone who keeps needing comfort: warm
            "Looking after yourself matters too. Have some water, eat something. Ask me anything whenever you're ready."],
 }
 LINE_BUSY_RX = r"(phone|फोन|फ़ोन|call|कॉल).{0,30}(nahi utha|नहीं उठा|not answer|no answer|busy|व्यस्त|नहीं लग)"
-UNKNOWN = {"en": "Sorry, I'm not sure about that. Please ask at the help desk inside Gate 1, on the left.",
-           "hi": "माफ़ कीजिए, इसकी पक्की जानकारी मेरे पास नहीं है। गेट 1 के अंदर बाईं ओर हेल्प डेस्क पर पूछिए।"}
+UNKNOWN = {"en": "Sorry, I'm not sure about that. Please ask at the Enquiry counter on the GJB ground floor.",
+           "hi": "माफ़ कीजिए, इसकी पक्की जानकारी मेरे पास नहीं है। GJB ग्राउंड फ़्लोर के इंक्वायरी काउंटर पर पूछिए।"}
 TELE_ACTION = [{"label": "📞 Tele-MANAS 14416", "tel": TELE_MANAS}]
 
 
@@ -835,15 +841,15 @@ def say(decision, state, lang, mode, text):
     if label == "TRAVEL":
         return say_travel(text, lang, mode), []
     if label == "LINE_BUSY":
-        return ("कभी-कभी लाइन व्यस्त रहती है, थोड़ी देर में फिर कोशिश कीजिए। अस्पताल में हैं तो विंग A, चौथी मंज़िल पर काउंसलर से सीधे मिल सकते हैं, "
+        return ("कभी-कभी लाइन व्यस्त रहती है, थोड़ी देर में फिर कोशिश कीजिए। अस्पताल में हैं तो GJB पाँचवीं मंज़िल, कमरा 512 में केवट काउंसलर से सीधे मिल सकते हैं, "
                 "और तब तक मैं यहीं हूँ, आप मुझसे बात कर सकते हैं।" if hi else
-                "Sometimes the line is busy; please try again in a little while. If you're at the hospital, you can see the counsellors directly on Wing A, "
-                "fourth floor. Until then I'm here, you can talk to me."), TELE_ACTION
+                "Sometimes the line is busy; please try again in a little while. If you're at the hospital, you can see a Kevat counsellor directly in GJB room 512, "
+                "fifth floor. Until then I'm here, you can talk to me."), TELE_ACTION
     if label == "DOCTOR_CONNECT":
         h = PLACES["A-G-HELP"]
-        return (f"मैं सीधे डॉक्टर से नहीं जोड़ सकती। हेल्प डेस्क ({place_short(h, lang)}) की नर्स नेविगेटर आपकी बात डॉक्टर तक पहुँचाती हैं, "
+        return (f"मैं सीधे डॉक्टर से नहीं जोड़ सकती। हेल्प डेस्क ({place_short(h, lang)}) पर या केवट (पेशेंट नेविगेटर, हरे कोट में) आपकी बात डॉक्टर तक पहुँचा सकते हैं, "
                 "और ओपीडी में आप डॉक्टर से सीधे पूछ सकते हैं।" if hi else
-                f"I can't connect you to a doctor directly. The nurse navigator at the help desk ({place_short(h, lang)}) passes your question to the doctor, "
+                f"I can't connect you to a doctor directly. The help desk ({place_short(h, lang)}) or a Kevat (patient navigator, green coat) can pass your question to the doctor, "
                 "and at the OPD you can ask the doctor directly."), []
     if label == "SCHEDULE":
         if state.get("pid") and store.next_tasks(state["pid"], actor=f"brain-{mode}", limit=1):
@@ -854,15 +860,15 @@ def say(decision, state, lang, mode, text):
         return (TRAVEL["concession_hi"] if hi else TRAVEL["concession"]), []
     if label == "OUTLOOK":
         return ("मैं समझ सकती हूँ कि आप कितने परेशान हैं, यह सवाल हर परिवार के मन में आता है। इसका सही जवाब सिर्फ़ डॉक्टर ही दे सकते हैं, "
-                "अगली बार ओपीडी में डॉक्टर से खुलकर पूछिए। अभी मन भारी हो तो काउंसलर या टेली-मानस 14416 से बात कर सकते हैं।" if hi else
+                "अगली बार ओपीडी में डॉक्टर से खुलकर पूछिए। अभी मन भारी हो तो केवट काउंसलर या टेली-मानस 14416 से बात कर सकते हैं।" if hi else
                 "I understand how worried you are; every family asks this. Only the doctors can answer it, so please ask them openly at the next OPD visit. "
-                "If it feels heavy right now, the counsellors or Tele-MANAS 14416 are there to talk."), TELE_ACTION
+                "If it feels heavy right now, a Kevat counsellor or Tele-MANAS 14416 are there to talk."), TELE_ACTION
     if label == "COST":
         u = PLACES[aspect]
         return (f"{_name(u, lang)} में ख़र्चे या मुफ़्त दवा की पक्की जानकारी मेरे पास नहीं है, वहीं पूछ लीजिए। "
-                f"पैसों की दिक्कत हो तो सामाजिक कार्य और आर्थिक मदद डेस्क (विंग A, ग्राउंड फ़्लोर, काउंटर 12 से 13) मदद करता है।" if hi else
+                f"पैसों की दिक्कत हो तो मेडिकल सोशल सर्विसेज़, गोल्डन जुबिली बिल्डिंग ग्राउंड फ़्लोर मदद करता है।" if hi else
                 f"I don't have confirmed cost details for {_name(u, lang)}; please ask there. If money is a problem, "
-                f"the social work and financial aid desk (Wing A, ground floor, counters 12 to 13) can help."), []
+                f"Medical Social Services, Golden Jubilee Building ground floor can help."), []
     if label == "NAV_NEXT":
         return say_nav(PLACES[aspect], state, lang, text), []
     if label == "ASK_HOSPITAL":
@@ -873,9 +879,9 @@ def say(decision, state, lang, mode, text):
     if label == "FIRST_VISIT":
         reg = PLACES["A-G-REG"]
         return ((f"पहली बार आए हैं तो पहले नया रजिस्ट्रेशन कराइए: {place_short(reg, lang)}, {_f(reg, 'hours', lang)}। "
-                 f"साथ लाइए: {_f(reg, 'bring', lang)}। वहीं UHID कार्ड बनेगा, फिर ओपीडी जाना होगा।") if hi else
+                 f"साथ लाइए: {_f(reg, 'bring', lang)}। वहीं स्मार्ट कार्ड बनेगा, फिर ओपीडी जाना होगा।") if hi else
                 (f"For a first visit, register first: {place_short(reg, lang)}, {_f(reg, 'hours', lang)}. "
-                 f"Bring: {_f(reg, 'bring', lang)}. You'll get your UHID card there, then go to the OPD.")), []
+                 f"Bring: {_f(reg, 'bring', lang)}. You'll get your Smart card there, then go to the OPD.")), []
     if label == "TWO_PLACES":
         a, b = (PLACES[x] for x in aspect.split("|"))
         state["place"] = b["id"]
@@ -938,20 +944,22 @@ def say(decision, state, lang, mode, text):
     if label in ("C-2-PET", "C-1-CT") and aspect == "where" and re.search(PET_CT_RX, text.lower()):
         state["place"] = "C-2-PET"        # "पेट सीटी" can be PET-CT or a CT of the stomach: give both, from the JSON
         pet, ct = PLACES["C-2-PET"], PLACES["C-1-CT"]
-        return (f"पेट-सीटी स्कैन {place_short(pet, lang)} पर है। अगर पेट का सादा सीटी स्कैन है, तो {place_short(ct, lang)}।" if hi else
-                f"PET-CT is in {place_short(pet, lang)}. A regular CT scan is in {place_short(ct, lang)}."), []
+        return (f"पेट-सीटी: {_f(pet, 'note', lang)}। अगर पेट का सादा सीटी स्कैन है, तो {place_short(ct, lang)}; बुकिंग काउंटर 129 पर।" if hi else
+                f"PET-CT: {_f(pet, 'note', lang)}. A regular CT scan is in {place_short(ct, lang)}; book at counter 129."), []
     if label in PLACES:
         if state.get("place") != label:
             state["path_step"] = 0                   # a new destination: the walk starts again (step 0 was just said)
         state["place"] = label
         return say_place(PLACES[label], aspect, lang, mode), []
     if label == "SCAN_GENERIC":
-        return ("कौन सा स्कैन? सीटी, एमआरआई, एक्स-रे, अल्ट्रासाउंड या पेट-सीटी?" if hi else
-                "Which scan is it: CT, MRI, X-ray, ultrasound, or PET-CT?"), []
+        return ("कौन सा स्कैन? सीटी, एमआरआई, एक्स-रे, मैमोग्राफ़ी या पेट-सीटी? सभी स्कैन की बुकिंग HBB पहली मंज़िल, रोटुंडा पर होती है।" if hi else
+                "Which scan is it: CT, MRI, X-ray, mammography, or PET-CT? All scans are booked at the Rotunda, HBB first floor."), []
     if label == "OPD_GENERIC":
-        state["place"] = "A-1-MED"                 # all OPDs are on Wing A, first floor: "pehli manzil?" can be confirmed
-        return ("ओपीडी विंग A, पहली मंज़िल पर है, मुख्य लिफ़्ट से जाइए। आपका कमरा नंबर ओपीडी पर्ची पर छपा है।" if hi else
-                "The OPDs are in Wing A, first floor; take the main lift. Your room number is printed on your OPD slip."), []
+        state["place"] = "A-1-MED"                 # TMH OPDs are per cancer type (DMG): ask which one
+        return ("TMH में हर कैंसर की अपनी ओपीडी है: जनरल ज़्यादातर गोल्डन जुबिली बिल्डिंग में, प्राइवेट होमी भाभा बिल्डिंग में। "
+                "कमरा नंबर अपॉइंटमेंट पर्ची पर छपा है। कैंसर का प्रकार बताइए, मैं कमरा बता दूँगी।" if hi else
+                "At TMH each cancer type has its own OPD: General mostly in the Golden Jubilee Building, Private in the Homi Bhabha Building. "
+                "Your room is printed on your appointment slip. Tell me the cancer type and I'll tell you the room."), []
     if label == "GREETING":
         p = store.get(state["pid"], actor=f"brain-{mode}") if state.get("pid") else None
         nm = p and p.get("name")
@@ -1184,9 +1192,9 @@ async def _respond(text, state, lang, original=None):
     if reply == state.get("last_reply") and decision["label"] in ("TRAVEL", "DOCUMENTS", "STAY") and state.get("last_reply_lang") == state.get("lang"):
         if decision["label"] == "DOCUMENTS":
             reg = PLACES["A-G-REG"]
-            reply = (f"ये कागज़ात रजिस्ट्रेशन पर दिखाने होते हैं: {place_short(reg, lang)}, {_f(reg, 'hours', lang)}। वहीं UHID कार्ड बनता है। "
+            reply = (f"ये कागज़ात रजिस्ट्रेशन पर दिखाने होते हैं: {place_short(reg, lang)}, {_f(reg, 'hours', lang)}। वहीं स्मार्ट कार्ड बनता है। "
                      f"बाक़ी बातों के लिए अस्पताल का नंबर {TRAVEL['phone']} है।" if lang == "hi" else
-                     f"Show these documents at registration: {place_short(reg, lang)}, {_f(reg, 'hours', lang)}. You get your UHID card there. "
+                     f"Show these documents at registration: {place_short(reg, lang)}, {_f(reg, 'hours', lang)}. You get your Smart card there. "
                      f"For anything else, the hospital's number is {TRAVEL['phone']}.")
         else:
             reply = (f"इस बारे में इससे ज़्यादा पक्की जानकारी मेरे पास नहीं है। अस्पताल के नंबर {TRAVEL['phone']} पर पूछ लीजिए।" if lang == "hi" else

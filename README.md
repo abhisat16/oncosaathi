@@ -7,13 +7,13 @@ Built for KOITA Health-a-thon 2026 by Team Oslava.
 Open it in Chrome, sign in with a mobile number, and press the call button (allow the microphone).
 The first visit after a quiet spell can take about a minute while the free server wakes up.
 
-> The hospital map is a **sample layout** of Tata Memorial Hospital, Parel, made for this prototype. OncoSaathi gives
+> The hospital map comes from the **Tata Memorial Hospital patient booklet** (5 buildings, 59 departments; see `build_hospital_tmh.py`). OncoSaathi gives
 > directions and logistics only. It never gives medical advice: emergencies go to the nearest nurse or help desk,
 > and distress to Tele-MANAS 14416.
 
 ## What it does
 - Voice call in Hindi, English and 9 more Indian languages, with interruption
-- Step-by-step walking directions to 40 departments over 5 floors
+- Step-by-step directions to 59 real TMH departments across 5 buildings (MB, GJB, AB, HBB, SB)
 - Reads a photo of the doctor's referral slip and names the right department
 - Real places to stay near the hospital (phone numbers only, never books), and travel from other states
 - Remembers the patient with consent; the data can be deleted at any time
