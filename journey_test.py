@@ -169,6 +169,14 @@ async def main():
     r = await turn(st9, "मैं पहली मंजिल तक पहुँच गया हूँ lift के पास खड़ा हूँ अब कहाँ जाऊँ?")
     check("on the floor -> the counter", "129" in r["text"], r["text"])
 
+    # 4 Nov live call: "...की बात कर रहा हूं" naming the hospital must answer the held question
+    q6 = store.create("9000000071", actor="test")
+    st10 = {"pid": q6["id"], "mode": "voice"}
+    brain.opening(st10)
+    await turn(st10, "मेरे को pharmacology department जाना है।")
+    r = await turn(st10, "मैं Tata Memorial Hospital की बात कर रहा हूं।")
+    check("'...की बात कर रहा हूं' -> held pharmacy question answered", "डिस्पेंसरी" in r["text"] and "GJB" in r["text"], r["text"])
+
     # reminders (web chat; WhatsApp only if configured)
     n = await reminders.run_once(force=True)
     msgs = store.pull_outbox(p["id"])

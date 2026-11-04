@@ -1163,7 +1163,10 @@ async def _respond(text, state, lang, original=None):
     held = state.pop("held_question", None)
     looks_like_hospital = (re.search(OTHER_NAMES_RX, low) or re.search(r"\b(hospital|medical|institute|clinic)\b|अस्पताल|हॉस्पिटल", low)) \
         and not re.search(QUESTION_RX + "|" + DEICTIC, low) and len(text.split()) <= 6
-    if held and not label.startswith("HOSP_") and label not in SAFETY and label not in PLACES and looks_like_hospital:
+    if held and not label.startswith("HOSP_") and label not in SAFETY and label not in PLACES and re.search(TATA_RX, low):
+        # "मैं Tata Memorial Hospital की बात कर रहा हूँ": any reply naming Tata answers the hospital question we asked
+        decision, source, label = {"label": "HOSP_TATA", "aspect": "where"}, "rules-held-tata", "HOSP_TATA"
+    elif held and not label.startswith("HOSP_") and label not in SAFETY and label not in PLACES and looks_like_hospital:
         decision, source, label = {"label": "HOSP_OTHER", "aspect": "where"}, "rules-held-other", "HOSP_OTHER"
     elif held and not label.startswith("HOSP_"):
         state["held_question"] = held            # they asked something else instead: keep the first question waiting
